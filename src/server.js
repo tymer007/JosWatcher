@@ -32,4 +32,7 @@ initDB().then(() => {
       console.log(`Local access: http://localhost:${PORT}`);
       console.log(`Network access: http://192.168.110.214:${PORT}`);
     });
+}).catch((error) => {
+    console.error("Failed to initialize database:", error);
+    process.exit(1);
 });
