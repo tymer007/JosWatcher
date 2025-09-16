@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { initDB } from "./config/db.js";
 import rateLimiter from "./middleware/rateLimiter.js";
+import job from "./config/cron.js";
 
 import alertsRoute from "./routes/alertsRoute.js";
 
@@ -27,8 +28,12 @@ app.get("/api/health", (req, res) => {
 
 initDB().then(() => {
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
-      console.log(`Local access: http://localhost:${PORT}`);
+    const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+    app.listen(PORT, HOST, () => {
+      console.log(`Server is running on http://${HOST}:${PORT}`);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`Local access: http://localhost:${PORT}`);
+      }
     });
 }).catch((error) => {
     console.error("Failed to initialize database:", error);
