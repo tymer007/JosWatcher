@@ -140,6 +140,115 @@ export async function getAllAlerts(req, res) {
     }
 }
 
+export async function getPublicAlerts(req, res) {
+    try {
+        const alerts = await sql`
+        SELECT * FROM alerts 
+        WHERE isPublic = true 
+        ORDER BY createdAt DESC 
+        `;
+        return res.status(200).json(alerts);
+    } catch (error) {
+        console.log("Error getting public alerts", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export async function handleAlert(req, res) {
+    try {
+        console.log("📥 Backend received handle alert request:", JSON.stringify(req.body, null, 2));
+        
+        const {
+            alertId,
+            userId,
+            status,
+            responseActionTaken
+        } = req.body;
+
+        // Validate required fields
+        if (!alertId || !userId || !status || !responseActionTaken) {
+            console.log("❌ Missing required fields:", {
+                alertId: !!alertId,
+                userId: !!userId,
+                status: !!status,
+                responseActionTaken: !!responseActionTaken
+            });
+            return res.status(400).json({ message: "alertId, userId, status, and responseActionTaken are required" });
+        }
+
+        // Validate alert ID
+        if (isNaN(parseInt(alertId))) {
+            return res.status(400).json({ message: "Invalid alert ID" });
+        }
+
+        // Check if user is admin
+        const user = await sql`
+            SELECT role FROM users WHERE user_id = ${userId}
+        `;
+
+        if (user.length === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (user[0].role !== 'admin') {
+            return res.status(403).json({ message: "Only admin users can handle alerts" });
+        }
+
+        // Validate status
+        const validStatuses = ['pending', 'in progress', 'resolved', 'cancelled', 'escalated'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ 
+                message: "Invalid status", 
+                validStatuses: validStatuses 
+            });
+        }
+
+        // Check if alert exists
+        const existingAlert = await sql`
+            SELECT * FROM alerts WHERE id = ${alertId}
+        `;
+
+        if (existingAlert.length === 0) {
+            return res.status(404).json({ message: "Alert not found" });
+        }
+
+        // Set current time for response time
+        const responseTime = new Date().toISOString();
+
+        // Update the alert
+        const updatedAlert = await sql`
+            UPDATE alerts 
+            SET 
+                status = ${status},
+                responderId = ${userId},
+                responseTime = ${responseTime},
+                responseActionTaken = ${responseActionTaken},
+                updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ${alertId}
+            RETURNING *
+        `;
+
+        console.log("✅ Alert handled successfully:", updatedAlert[0]);
+        return res.status(200).json({ 
+            message: "Alert handled successfully", 
+            alert: updatedAlert[0] 
+        });
+
+    } catch (error) {
+        console.log("Error handling alert", error);
+        
+        // Handle specific enum errors
+        if (error.code === '22P02' && error.message.includes('enum')) {
+            return res.status(400).json({ 
+                message: "Invalid status value", 
+                validStatuses: ['pending', 'in progress', 'resolved', 'cancelled', 'escalated']
+            });
+        }
+        
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
 export async function getAlertTypes(req, res) {
     try {
         const result = await sql`
@@ -152,3 +261,4 @@ export async function getAlertTypes(req, res) {
         return res.status(500).json({ message: "Internal server error" });
     }
 }
+
