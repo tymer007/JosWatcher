@@ -17,13 +17,33 @@ if(process.env.NODE_ENV === "production") job.start();
 app.use(express.json());
 app.use(cors());
 
-app.use(express.json());
+// Debug middleware for POST requests
+app.use((req, res, next) => {
+  if (req.method === 'POST') {
+    console.log("🔍 POST request received:");
+    console.log("  URL:", req.url);
+    console.log("  Headers:", req.headers);
+    console.log("  Body:", JSON.stringify(req.body, null, 2));
+  }
+  next();
+});
+
 app.use(rateLimiter);
 
 app.use("/api/alerts", alertsRoute);
 
 app.get("/api/health", (req, res) => {
-    res.status(200).json({ message: "Backend is working!", timestamp: new Date().toISOString() });
+    console.log("Health check endpoint hit");
+    res.status(200).json({ 
+        message: "Backend is working!", 
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
+
+// Add a simple root endpoint for testing
+app.get("/", (req, res) => {
+    res.json({ message: "API is running", timestamp: new Date().toISOString() });
 });
 
 initDB().then(() => {

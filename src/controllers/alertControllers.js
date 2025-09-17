@@ -2,28 +2,92 @@ import { sql } from "../config/db.js";
 
 export async function createAlert(req, res) {
   try {
+    console.log("📥 Backend received request body:", JSON.stringify(req.body, null, 2));
+    
     const {
       user_id,
-      title,
       description,
       location,
       coordinates,
       type,
+      isPublic,
       time,
     } = req.body;
 
-    if (!user_id || !title || !description || !location || !time || !coordinates) {
+    // Validate required fields
+    if (!user_id || !description || !location || !coordinates || !type || isPublic === undefined) {
+      console.log("❌ Missing required fields:", {
+        user_id: !!user_id,
+        description: !!description,
+        location: !!location,
+        coordinates: !!coordinates,
+        type: !!type,
+        isPublic: isPublic !== undefined
+      });
+      console.log("❌ Field values:", {
+        user_id,
+        description,
+        location,
+        coordinates,
+        type,
+        isPublic
+      });
       return res.status(400).json({ message: "All fields are required" });
     }
 
+    // Additional validation for coordinates
+    if (!Array.isArray(coordinates) || coordinates.length !== 2) {
+      console.log("❌ Invalid coordinates format:", coordinates);
+      return res.status(400).json({ message: "Coordinates must be an array with 2 elements [lat, lng]" });
+    }
+
+    // Valid alert types
+    const validTypes = [
+      'Theft', 'Accidents', 'Vandalism', 'Harassment', 'Assault', 
+      'Burglary', 'Robbery', 'Suspicious Activity', 'Public Disturbance', 
+      'Missing Person', 'Traffic Violations', 'Fire Incidents', 
+      'Domestic Violence', 'Drug-Related Offenses', 'Kidnapping'
+    ];
+
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ 
+        message: "Invalid alert type", 
+        validTypes: validTypes 
+      });
+    }
+
+    // Generate title as "{type} at {location}"
+    const title = `${type} at ${location}`;
+    
+    // Set time to current timestamp (same as createdAt)
+    const currentTime = new Date().toISOString();
+
+    // Convert coordinates array to proper JSON format
+    const coordinatesJson = coordinates ? JSON.stringify(coordinates) : null;
+
     const alert = await sql`
-        INSERT INTO alerts (user_id, title, description, location, coordinates, type, time)
-        VALUES (${user_id}, ${title}, ${description}, ${location}, ${coordinates}, ${type}, ${time})
+        INSERT INTO alerts (user_id, title, description, location, coordinates, type, time, isPublic)
+        VALUES (${user_id}, ${title}, ${description}, ${location}, ${coordinatesJson}, ${type}, ${currentTime}, ${isPublic})
         RETURNING *
         `;
     return res.status(201).json({ message: "Alert created successfully", alert });
   } catch (error) {
     console.log("Error creating alert", error);
+    
+    // Handle specific enum errors
+    if (error.code === '22P02' && error.message.includes('enum')) {
+      return res.status(400).json({ 
+        message: "Invalid enum value", 
+        details: error.message,
+        validTypes: [
+          'Theft', 'Accidents', 'Vandalism', 'Harassment', 'Assault', 
+          'Burglary', 'Robbery', 'Suspicious Activity', 'Public Disturbance', 
+          'Missing Person', 'Traffic Violations', 'Fire Incidents', 
+          'Domestic Violence', 'Drug-Related Offenses', 'Kidnapping'
+        ]
+      });
+    }
+    
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -72,6 +136,19 @@ export async function getAllAlerts(req, res) {
         return res.status(200).json(alerts);
     } catch (error) {
         console.log("Error getting all alerts", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export async function getAlertTypes(req, res) {
+    try {
+        const result = await sql`
+        SELECT unnest(enum_range(NULL::alert_type)) as alert_type
+        `;
+        const types = result.map(row => row.alert_type);
+        return res.status(200).json({ alertTypes: types });
+    } catch (error) {
+        console.log("Error getting alert types", error);
         return res.status(500).json({ message: "Internal server error" });
     }
 }
