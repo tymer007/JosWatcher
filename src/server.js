@@ -6,6 +6,7 @@ import rateLimiter from "./middleware/rateLimiter.js";
 import job from "./config/cron.js";
 
 import alertsRoute from "./routes/alertsRoute.js";
+import userRoute from "./routes/userRoute.js";
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ app.use((req, res, next) => {
 app.use(rateLimiter);
 
 app.use("/api/alerts", alertsRoute);
+app.use("/api/users", userRoute);
 
 app.get("/api/health", (req, res) => {
     console.log("Health check endpoint hit");
